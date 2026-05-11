@@ -71,7 +71,7 @@ async def run_creation_pipeline(auto_approve: bool = False) -> None:
     await init_niche_config(kb)
 
     graph = build_creation_pipeline(settings, store)
-    compiled = graph.compile(checkpointer=checkpointer)
+    compiled = graph.compile(checkpointer=checkpointer, interrupt_before=["human_approval"])
 
     config = {"configurable": {"thread_id": "manual_creation_1"}}
 
