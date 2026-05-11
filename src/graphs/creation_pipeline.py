@@ -5,6 +5,7 @@ from langgraph.graph import END, START, StateGraph
 
 from config.settings import Settings
 from src.models.state import CreationPipelineState
+from src.nodes.approval import human_approval
 from src.nodes.generation import generate_post_variants
 from src.nodes.goal_check import goal_check
 from src.nodes.patterns import extract_patterns
@@ -60,6 +61,7 @@ def build_creation_pipeline(
         "rank_and_select",
         partial(rank_and_select, llm=llm, kb=kb, embedding_client=embedding_client),
     )
+    graph.add_node("human_approval", human_approval)
     graph.add_node(
         "publish_post",
         partial(publish_post, threads_client=threads_client, kb=kb),
@@ -80,7 +82,17 @@ def build_creation_pipeline(
     graph.add_edge("research_viral_content", "extract_patterns")
     graph.add_edge("extract_patterns", "generate_post_variants")
     graph.add_edge("generate_post_variants", "rank_and_select")
-    graph.add_edge("rank_and_select", "publish_post")
+    graph.add_edge("rank_and_select", "human_approval")
+    graph.add_conditional_edges(
+        "human_approval",
+        lambda state: state.get("human_decision"),
+        {
+            "approve": "publish_post",
+            "edit": "generate_post_variants",
+            "reject": "research_viral_content",
+            "use_alternative": "rank_and_select",
+        },
+    )
     graph.add_edge("publish_post", "schedule_metrics_check")
     graph.add_edge("schedule_metrics_check", END)
 
