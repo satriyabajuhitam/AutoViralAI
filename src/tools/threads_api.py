@@ -39,6 +39,12 @@ class ThreadsClient(ABC):
     @abstractmethod
     async def get_user_posts(self, limit: int = 25) -> list[dict]: ...
 
+    async def refresh_long_lived_token(self) -> str | None:
+        return None
+
+    def set_access_token(self, token: str) -> None:
+        pass
+
     async def close(self) -> None:
         pass
 
@@ -227,6 +233,23 @@ class RealThreadsClient(ThreadsClient):
             },
         )
         return resp.json().get("data", [])
+
+    async def refresh_long_lived_token(self) -> str | None:
+        resp = await self._request_with_retry(
+            "GET",
+            f"{self.base_url.rsplit('/', 1)[0]}/refresh_access_token",
+            params={
+                "grant_type": "th_refresh_token",
+                "access_token": self.access_token,
+            },
+        )
+        new_token = resp.json().get("access_token")
+        if new_token:
+            self.access_token = new_token
+        return new_token
+
+    def set_access_token(self, token: str) -> None:
+        self.access_token = token
 
     async def close(self) -> None:
         await self._client.aclose()

@@ -133,7 +133,7 @@ async def lifespan(app: FastAPI):
             telegram_chat_id=settings.telegram_chat_id,
         )
         set_orchestrator(orchestrator)
-        orchestrator.start()
+        await orchestrator.start()
 
         app.state.orchestrator = orchestrator
 

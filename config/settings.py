@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     )
 
     anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-4-20250514"
+    llm_model: str = "claude-sonnet-4-6"
 
     threads_app_id: str = ""
     threads_app_secret: str = ""
