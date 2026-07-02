@@ -94,7 +94,7 @@ class RealThreadsScraper(ThreadsScraper):
         query = " ".join(hashtags) if hashtags else "programming tech coding"
         run_input = {
             "query": query,
-            "sort": "Top",
+            "sort": "top",
             "maxResults": limit,
         }
         logger.info("Starting Apify Threads scraper (timeout=%ds)", APIFY_TIMEOUT_SECS)

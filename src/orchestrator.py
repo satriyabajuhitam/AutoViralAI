@@ -71,6 +71,17 @@ class PipelineOrchestrator:
             replace_existing=True,
         )
 
+        self._scheduler.add_job(
+            self.refresh_threads_token,
+            "cron",
+            day_of_week="sun",
+            hour=5,
+            minute=0,
+            timezone="Europe/Warsaw",
+            id="threads_token_refresh",
+            replace_existing=True,
+        )
+
     async def run_creation_pipeline(self) -> dict | None:
         async with self._cycle_lock:
             self._creation_cycle += 1
@@ -124,7 +135,7 @@ class PipelineOrchestrator:
                     values.get("current_follower_count", 0),
                     values.get("target_follower_count", 0),
                 )
-            elif not values.get("selected_post"):
+            elif not values.get("selected_post") or not values.get("published_post"):
                 errors = values.get("errors", [])
                 await self._send_creation_failure_telegram(cycle, errors)
 
@@ -277,7 +288,57 @@ class PipelineOrchestrator:
 
         logger.info("Rescheduled creation jobs for times: %s", posting_times)
 
-    def start(self) -> None:
+    async def _bootstrap_threads_token(self) -> None:
+        if not self.settings.is_production:
+            return
+        try:
+            stored = await self.kb.get_threads_access_token()
+        except Exception:
+            logger.exception("Failed to load threads token from KB; using env value")
+            return
+        if stored:
+            self._threads_client.set_access_token(stored)
+            logger.info("Loaded threads access token from KB")
+        elif self.settings.threads_access_token:
+            try:
+                await self.kb.save_threads_access_token(self.settings.threads_access_token)
+                logger.info("Seeded threads access token from env into KB")
+            except Exception:
+                logger.exception("Failed to seed threads access token into KB")
+
+    async def refresh_threads_token(self) -> None:
+        logger.info("Refreshing Threads long-lived access token")
+        try:
+            new_token = await self._threads_client.refresh_long_lived_token()
+        except Exception as e:
+            logger.exception("Threads token refresh failed")
+            await self._send_token_refresh_failure_telegram(str(e))
+            return
+        if not new_token:
+            logger.warning("Threads token refresh returned empty token")
+            await self._send_token_refresh_failure_telegram("empty token in response")
+            return
+        try:
+            await self.kb.save_threads_access_token(new_token)
+        except Exception:
+            logger.exception("Failed to persist refreshed threads token")
+            await self._send_token_refresh_failure_telegram("persist failed")
+            return
+        logger.info("Threads access token refreshed and persisted")
+
+    async def _send_token_refresh_failure_telegram(self, reason: str) -> None:
+        if not self.bot_app or not self.telegram_chat_id:
+            return
+        try:
+            await self.bot_app.bot.send_message(
+                chat_id=self.telegram_chat_id,
+                text=f"Threads token refresh failed: {reason}. Generate a new token manually.",
+            )
+        except TelegramError as e:
+            logger.error("Failed to send token refresh failure notification: %s", e)
+
+    async def start(self) -> None:
+        await self._bootstrap_threads_token()
         self.setup_schedules()
         self._scheduler.start()
         logger.info("Orchestrator started with scheduled jobs")

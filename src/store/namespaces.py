@@ -20,3 +20,7 @@ def ns_pending_metrics(account_id: str) -> tuple[str, str]:
 
 def ns_metrics_history(account_id: str) -> tuple[str, str]:
     return ("metrics_history", account_id)
+
+
+def ns_secrets(account_id: str) -> tuple[str, str]:
+    return ("secrets", account_id)

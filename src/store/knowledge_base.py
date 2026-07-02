@@ -12,6 +12,7 @@ from src.store.namespaces import (
     ns_pattern_performance,
     ns_pending_metrics,
     ns_published_posts,
+    ns_secrets,
     ns_strategy,
 )
 
@@ -158,6 +159,25 @@ class KnowledgeBase:
             if p.pattern_used:
                 counts[p.pattern_used] = counts.get(p.pattern_used, 0) + 1
         return counts
+
+    async def get_threads_access_token(self) -> str | None:
+        try:
+            item = await self.store.aget(ns_secrets(self.account_id), "threads_access_token")
+            if item:
+                return item.value.get("value")
+            return None
+        except Exception as e:
+            raise KnowledgeBaseError(f"Failed to get threads access token: {e}") from e
+
+    async def save_threads_access_token(self, token: str) -> None:
+        try:
+            await self.store.aput(
+                ns_secrets(self.account_id),
+                "threads_access_token",
+                {"value": token, "updated_at": datetime.now(UTC).isoformat()},
+            )
+        except Exception as e:
+            raise KnowledgeBaseError(f"Failed to save threads access token: {e}") from e
 
     async def cleanup_old_metrics(self, keep_last: int = 200) -> int:
         try:
